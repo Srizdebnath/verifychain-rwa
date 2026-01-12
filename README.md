@@ -108,7 +108,7 @@ The system consists of three main pillars:
 ### **Smart Contracts**
 -   **Language**: Solidity ^0.8.20
 -   **Standard**: ERC-20 (OpenZeppelin)
--   **Network**: Celo (Alfajores Testnet)
+-   **Network**: Celo (Sepolia Testnet)
 
 ---
 
