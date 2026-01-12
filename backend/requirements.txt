@@ -4,3 +4,4 @@ PyPDF2
 groq
 requests
 python-dotenv
+gunicorn
