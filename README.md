@@ -5,11 +5,70 @@
 
 ---
 
+## 🚩 Problem Statement
+Government bonds are widely regarded as safe, sovereign-backed investment instruments, yet meaningful retail participation remains limited. Structural inefficiencies and missing trust infrastructure prevent broader adoption, especially as tokenized government bonds emerge within the RWA ecosystem.
+
+
+
+### Key Challenges:
+- **High minimum investment thresholds**: Institutional barriers keep retail investors out.
+- **Complex and fragmented onboarding**: Lengthy, paper-heavy processes.
+- **Limited secondary market liquidity**: Bonds are hard to trade before maturity.
+- **Opaque yield and payout visibility**: Investors lack real-time data on returns.
+- **No standardized, tamper-proof verification**: Reliance on centralized intermediaries creates trust gaps.
+
+---
+
+## 💡 Proposed Solution: VerifyChain RWA
+**Issuance already exists.** The missing piece is trust, verification, and compliance — that’s where **VerifyChain RWA** creates maximum value.
+
+
+
+### What We Do:
+- **Cryptographic Verification**: Generate hashes of government bond metadata using AI.
+- **On-Chain Proof**: Verify fractional ownership and issuance on the Celo blockchain.
+- **Lifecycle Tracking**: Record yield distribution and redemption events immutably.
+- **Privacy-Preserving**: Enable trustless verification without exposing sensitive investor data.
+
+### What This Solves:
+- **Prevents Fraud**: Eliminates fake or duplicated bond tokens.
+- **Transparent Yields**: Ensures 100% visibility into payout history.
+- **Audit Trails**: Creates regulator-ready, on-chain records.
+- **Trust**: Builds investor confidence in RWA platforms.
+
+---
+
+## 🌍 Why Celo?
+We chose **Celo** as our infrastructure layer for its unique "Mobile-First, Carbon-Negative" approach that aligns perfectly with our mission of accessible RWAs.
+
+1.  **Mobile-First Accessibility**: Celo's lightweight protocol enables verification and trading on mobile devices, crucial for emerging markets.
+2.  **Stablecoin-Native Gas**: Users can pay transaction fees in stablecoins (cUSD/USDC), removing the friction of holding volatile assets just for gas.
+3.  **Sustainability**: Celo is carbon-negative, making our ESG-compliant bond platform truly green.
+4.  **EVM Compatibility**: Allows us to leverage the robust Ethereum developer ecosystem while enjoying sub-cent fees.
+
+---
+
+## 🤖 Why AI & How We Use It?
+Artificial Intelligence is the "Verifier" in our architecture, bridging the gap between off-chain documents and on-chain truth.
+
+### The Problem with RWAs
+Real World Assets start as **paper/PDF legal documents**. Bridging them on-chain manually is slow, error-prone, and hard to audit.
+
+### Our AI Approach
+We leverage **Llama 3 (70B via Groq)** as a specialized document analysis engine:
+1.  **Extraction**: The AI parses complex PDF data (ISIN, Interest Rate, Maturity Date) with human-like understanding but machine speed.
+2.  **Validation**: It cross-references extracted data against defined schema rules.
+3.  **Hashing**: The verified data is hashed to create a digital fingerprint. This fingerprint is what goes on-chain, ensuring that **if the document changes, the hash changes**, alerting the smart contract.
+
+---
+
 ## 🚀 Live Demo & Links
 - **Frontend Deployed URL**: [Click Here](https://verifychain-kappa.vercel.app/)
 - **Backend API URL**: [Click Here](https://verifychain-rwa.onrender.com)
-- **Smart Contract Address**: `0x919F737bb0C39c05c459a20A2FaB26035E9734f3` (Celo Alfajores)
-- **YouTube Walkthrough**: [Watch Video](https://youtube.com/...)
+- **Smart Contract Address**: `0x919F737bb0C39c05c459a20A2FaB26035E9734f3` (Celo Sepolia Testnet)
+
+![Demo](assets/demo.png)
+
 
 ---
 
