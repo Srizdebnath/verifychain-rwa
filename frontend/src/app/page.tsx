@@ -71,30 +71,44 @@ export default function Home() {
     if (!file) return toast.error("Select a file first");
     setLoading(true);
     setTrustScore(0);
-    setLogs([]);
-
+    setLogs([]); 
+    setAiData(null); 
+    
     addLog(`[1/5] Uploading Document: ${file.name}...`);
-
+    
     const formData = new FormData();
     formData.append("file", file);
 
     try {
      
       const res = await axios.post("https://verifychain-rwa.onrender.com/analyze_and_oracle", formData);
-
+      
       const analysis = res.data.ai_analysis;
       const oracle = res.data.oracle_data;
+      const faceValue = parseInt(analysis.face_value_amount || 0);
 
-      addLog(`[AI] Extracted Metadata: ${analysis.bond_name}`);
-      setTrustScore(20);
-      await new Promise(r => setTimeout(r, 500));
-      addLog(`[PoR] Document Face Value: $${parseInt(analysis.face_value_amount || 0).toLocaleString()}`);
-      if (analysis.face_value_amount > 0) {
-        addLog(`[PoR] Reserve Limit Established.`);
-        setTrustScore(50);
+      if (analysis.bond_name === "Unknown" || !analysis.bond_name) {
+          addLog(`[AI] ⚠️ Could not identify Bond Name.`);
       } else {
-        addLog(`[PoR] WARNING: No Face Value detected in PDF.`);
+          addLog(`[AI] Extracted Metadata: ${analysis.bond_name}`);
       }
+      setTrustScore(20);
+      await new Promise(r => setTimeout(r, 500)); 
+
+      addLog(`[PoR] Document Face Value: ${faceValue > 0 ? "₹" + faceValue.toLocaleString() : "Unknown"}`);
+      
+      if (faceValue <= 0) {
+          
+          addLog(`[PoR] ❌ CRITICAL FAILURE: No Reserve Value found.`);
+          addLog(`[System] Verification Terminated.`);
+          setTrustScore(10); 
+          toast.error("Verification Failed: Invalid Bond Document");
+          setLoading(false);
+          return; 
+      }
+
+      addLog(`[PoR] ✅ Reserve Limit Established.`);
+      setTrustScore(50);
       await new Promise(r => setTimeout(r, 500));
 
       
@@ -103,15 +117,16 @@ export default function Home() {
       setTrustScore(80);
       await new Promise(r => setTimeout(r, 500));
 
-      
-      addLog(`[Audit] Contract: ${CONTRACT_ADDRESS.slice(0, 6)}... verified.`);
+     
+      addLog(`[Audit] Contract: ${CONTRACT_ADDRESS.slice(0,6)}... verified.`);
       setTrustScore(100);
 
       setAiData(res.data);
-      toast.success("Verification Complete");
+      toast.success("Verification Complete. Asset Valid.");
+      
     } catch (err) {
       addLog("CRITICAL ERROR: Backend Connection Failed");
-      toast.error("Ensure app.py is running on port 5000");
+      toast.error("Analysis Error");
     }
     setLoading(false);
   };

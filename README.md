@@ -1,14 +1,12 @@
 # 🏦 VerifyChain RWA
 ### East India Blockchain Summit 2.0
 
-**VerifyChain RWA** is a decentralized Real World Asset (RWA) tokenization platform that brings transparency, security, and automation to bond trading. It leverages **AI Agents** to verify legal documents, **IPFS** for immutable storage, and **Smart Contracts** for compliance-enforced tokenization.
+**VerifyChain RWA** is a decentralized Real World Asset (RWA) tokenization platform that brings transparency, security, and automation to bond trading. It leverages **AI Agents** to verify legal documents, **Oracles** for real-time market data, and **Smart Contracts** for compliance-enforced tokenization.
 
 ---
 
 ## 🚩 Problem Statement
 Government bonds are widely regarded as safe, sovereign-backed investment instruments, yet meaningful retail participation remains limited. Structural inefficiencies and missing trust infrastructure prevent broader adoption, especially as tokenized government bonds emerge within the RWA ecosystem.
-
-
 
 ### Key Challenges:
 - **High minimum investment thresholds**: Institutional barriers keep retail investors out.
@@ -22,19 +20,11 @@ Government bonds are widely regarded as safe, sovereign-backed investment instru
 ## 💡 Proposed Solution: VerifyChain RWA
 **Issuance already exists.** The missing piece is trust, verification, and compliance — that’s where **VerifyChain RWA** creates maximum value.
 
-
-
 ### What We Do:
-- **Cryptographic Verification**: Generate hashes of government bond metadata using AI.
-- **On-Chain Proof**: Verify fractional ownership and issuance on the Celo blockchain.
-- **Lifecycle Tracking**: Record yield distribution and redemption events immutably.
-- **Privacy-Preserving**: Enable trustless verification without exposing sensitive investor data.
-
-### What This Solves:
-- **Prevents Fraud**: Eliminates fake or duplicated bond tokens.
-- **Transparent Yields**: Ensures 100% visibility into payout history.
-- **Audit Trails**: Creates regulator-ready, on-chain records.
-- **Trust**: Builds investor confidence in RWA platforms.
+- **AI-Powered Verification**: We use Llama 3 to analyze PDF bond certificates and extract critical financial data (ISIN, Face Value).
+- **Real-Time Oracle**: We fetch live 10-year Treasury yields via Yahoo Finance API to ensure the bond's on-chain data reflects real-market conditions.
+- **Proof of Reserve (PoR)**: We ensure that the amount of tokens minted cannot exceed the "Face Value" extracted from the legal document.
+- **On-Chain Compliance**: Our smart contract enforces limits and tracks the asset lifecycle on the Celo blockchain.
 
 ---
 
@@ -48,49 +38,45 @@ We chose **Celo** as our infrastructure layer for its unique "Mobile-First, Carb
 
 ---
 
-## 🤖 Why AI & How We Use It?
-Artificial Intelligence is the "Verifier" in our architecture, bridging the gap between off-chain documents and on-chain truth.
+## 🛠 Detailed Codebase Breakdown
 
-### The Problem with RWAs
-Real World Assets start as **paper/PDF legal documents**. Bridging them on-chain manually is slow, error-prone, and hard to audit.
+### 1. Backend (`backend/app.py`)
+The backend is a Flask server acting as the **Verification Oracle**. It bridges the off-chain world (documents, web data) with the on-chain world.
 
-### Our AI Approach
-We leverage **Llama 3 (70B via Groq)** as a specialized document analysis engine:
-1.  **Extraction**: The AI parses complex PDF data (ISIN, Interest Rate, Maturity Date) with human-like understanding but machine speed.
-2.  **Validation**: It cross-references extracted data against defined schema rules.
-3.  **Hashing**: The verified data is hashed to create a digital fingerprint. This fingerprint is what goes on-chain, ensuring that **if the document changes, the hash changes**, alerting the smart contract.
+*   **`POST /analyze_and_oracle`**: This is the core endpoint.
+    *   **Input**: Receives a PDF file (Bond Certificate).
+    *   **Process - Step 1 (AI Analysis)**: Uses `PyPDF2` to read text. Sends the text to **Groq (Llama 3.3-70b-versatile)** with a prompt to extract JSON data: `bond_name`, `isin`, and `face_value_amount`.
+    *   **Process - Step 2 (Market Oracle)**: Uses `yfinance` to fetch the ticker `^TNX` (CBOE 10-Year Treasury Note Yield) to get the real-time risk-free rate.
+    *   **Output**: Returns a JSON object combining the AI-extracted metadata and the live market yield.
+
+### 2. Smart Contract (`contracts/RealRWA.sol`)
+The Solidity contract manages the asset lifecycle and enforces rules on the Celo blockchain.
+
+*   **`createAsset(...)`**: Called by the owner to register a new bond. It records the Name, ISIN, Face Value (Hard Cap), Initial Yield, and IPFS Hash.
+*   **`mintFractionalShares(...)`**: Allows minting tokens for a specific bond. **Critical Feature**: It checks `mintedAmount + amount <= faceValue`. This enforces **Proof of Reserve**—you cannot mint more tokens than the physical document allows.
+*   **`updateMarketData(...)`**: Allows the oracle to update the yield of a bond, keeping it in sync with the real market.
+*   **`BondMetadata` Struct**: Stores the truth of the asset: `name`, `isin`, `faceValue`, `currentYield`, `lastUpdate`, `ipfsHash`.
+
+### 3. Frontend (`frontend/src/app/page.tsx`)
+The user interface is a Modern Next.js application that orchestrates the flow.
+
+*   **Document Upload**: Users upload a PDF.
+*   **AI & Oracle Interaction**: Calls the backend `analyze_and_oracle` endpoint and displays the extracted "Confidence Score", Face Value, and Live Yield.
+*   **Minting**: If the user approves the analysis, they sign a transaction using `ethers.js`. This calls `createAsset` on the smart contract, passing the AI-verified data directly to the blockchain.
+*   **Dashboard**: Displays the "Public Transparency Ledger" by fetching all created bonds from the smart contract using `fetchRegistry`.
 
 ---
 
 ## 🚀 Live Demo & Links
 - **Frontend Deployed URL**: [Click Here](https://verifychain-kappa.vercel.app/)
 - **Backend API URL**: [Click Here](https://verifychain-rwa.onrender.com)
-- **Smart Contract Address**: `0x919F737bb0C39c05c459a20A2FaB26035E9734f3` (Celo Sepolia Testnet)
+- **Smart Contract Address**: `0xE715acd4c54F030d021b7147c20786623fFf482a` (Celo Sepolia Testnet)
 
 ![Demo](assets/demo.png)
 
-
 ---
 
-## 🛠 Project Architecture
-
-The system consists of three main pillars:
-
-1.  **AI Verification Engine (Backend)**: 
-    -   Extracts data from Bond PDFs using **Llama 3 (via Groq)**.
-    -   Generates SHA256 hashes for document integrity.
-    -   Uploads original documents to **IPFS/Pinata**.
-2.  **Compliance Layer (Smart Contract)**:
-    -   Enforces KYC whitelisting for all participants.
-    -   Mints ERC-20 tokens linked to real-world bond data.
-    -   Restricts transfers to verified users only.
-3.  **User Dashboard (Frontend)**:
-    -   Allows Issuers to upload PDFs and mint tokens.
-    -   Allows Investors to view and trade verified bonds.
-
----
-
-## 📂 Tech Stack
+##  Tech Stack
 
 ### **Frontend**
 -   **Framework**: Next.js 16 (React 19)
@@ -101,9 +87,9 @@ The system consists of three main pillars:
 ### **Backend**
 -   **Framework**: Flask (Python)
 -   **AI Model**: Llama 3.3 70B (via Groq API)
--   **Storage**: IPFS (Pinata SDK)
+-   **Market Data**: Yahoo Finance (`yfinance`)
 -   **PDF Processing**: PyPDF2
--   **Security**: SHA256 Hashing
+-   **web3.py**: Included for future server-side signing capabilities.
 
 ### **Smart Contracts**
 -   **Language**: Solidity ^0.8.20
@@ -120,8 +106,8 @@ git clone https://github.com/Srizdebnath/verifychain-rwa
 cd VerifyChain_RWA
 ```
 
-### 2️⃣ Backend Setup (AI & IPFS Engine)
-The backend handles document parsing, AI analysis, and IPFS uploads.
+### 2️⃣ Backend Setup (AI & Oracle Engine)
+The backend handles document parsing, AI analysis, and market data fetching.
 
 ```bash
 cd backend
@@ -133,8 +119,7 @@ pip install -r requirements.txt
 **Configure Environment Variables (`backend/.env`):**
 ```env
 GROQ_API_KEY=your_groq_api_key
-PINATA_API_KEY=your_pinata_key
-PINATA_SECRET_API_KEY=your_pinata_secret
+PRIVATE_KEY=your_wallet_private_key
 ```
 
 **Run Server:**
@@ -166,43 +151,26 @@ npm run dev
 
 ## 🔌 API Endpoints
 
-### `POST /analyze_bond`
-Uploads a Bond PDF, extracts data using AI, and pins to IPFS.
+### `POST /analyze_and_oracle`
+Uploads a Bond PDF, extracts data using AI, and fetches live yields.
 
 -   **Body**: `form-data` with `file` (PDF)
 -   **Response**:
     ```json
     {
-      "success": true,
-      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "ipfs_cid": "QmHash...",
-      "ai_data": {
+      "ai_analysis": {
         "bond_name": "Government of India 7.26% 2033",
         "isin": "IN0020230018",
-        "risk_rating": "AAA",
-        "detected_yield": 726,
-        "raw_yield": 7.26
+        "face_value_amount": 10000000
+      },
+      "oracle_data": {
+        "source": "Yahoo Finance API",
+        "ticker": "^TNX (10Y Yield)",
+        "live_yield": 4.15,
+        "timestamp": 171569234
       }
     }
     ```
-
----
-
-## 📜 Smart Contracts
-
-Located in `contracts/VerifyChainRWA.sol`.
-
-### Key Features
--   **`whitelistUser(address)`**: Only the owner can whitelist investors (KYC).
--   **`mintBond(...)`**: Mints tokens representing the bond with on-chain metadata (IPFS Hash, Doc Hash, Yield).
--   **`transfer(...)`**: Overridden to block transfers if sender or recipient is not KYC verified.
--   **`verifyIntegrity(...)`**: Checks if a provided document hash matches the on-chain stored hash.
-
-### Deploy (Remix / Hardhat)
-1.  Open Remix IDE.
-2.  Compile `VerifyChainRWA.sol`.
-3.  Deploy using Injected Provider (Metamask) connected to Celo Alfajores.
-4.  Copy the contract address and update it in your frontend config.
 
 ---
 
