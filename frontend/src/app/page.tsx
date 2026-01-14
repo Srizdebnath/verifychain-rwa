@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import {
   Upload, FileText, CheckCircle, Loader2, ArrowRight, Activity,
   Globe, Shield, Database, Smartphone, Zap, Leaf, Lock,
-  BarChart3, Scale, Users
+  BarChart3, Scale, Users, Send, Wallet
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import Navbar from "../components/Navbar";
@@ -16,10 +16,13 @@ import Terminal from "../components/Terminal";
 const CONTRACT_ADDRESS = "0xC18243d1A4014A973B2206e3FC8FcCb65aaA0195";
 
 const ABI = [
-    // Updated function signature for Fractionalization
+    // RWA Functions
     "function createAsset(string _name, string _isin, uint256 _faceValue, uint256 _initialYield, string _ipfsHash) public",
     "function nextBondId() public view returns (uint256)",
-    "function bonds(uint256) public view returns (string name, string isin, uint256 faceValue, uint256 currentYield, uint256 lastUpdate, string ipfsHash, bool isActive)"
+    "function bonds(uint256) public view returns (string name, string isin, uint256 faceValue, uint256 currentYield, uint256 lastUpdate, string ipfsHash, bool isActive)",
+    // ERC20 Standard Functions (For Selling/Transferring)
+    "function transfer(address to, uint256 amount) public returns (bool)",
+    "function balanceOf(address account) public view returns (uint256)"
 ];
 
 export default function Home() {
@@ -30,20 +33,32 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [registry, setRegistry] = useState<any[]>([]);
   const [trustScore, setTrustScore] = useState(0);
+  
+  // DISTRIBUTION STATE
+  const [userBalance, setUserBalance] = useState("0");
+  const [recipient, setRecipient] = useState("");
+  const [amountToSend, setAmountToSend] = useState("");
 
   const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
 
-  // --- FETCH REGISTRY DATA ---
-  const fetchRegistry = async () => {
+  // --- FETCH REGISTRY & BALANCE ---
+  const fetchData = async () => {
     if (!window.ethereum) return;
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
       
+      // 1. Fetch Balance
+      if (signer) {
+          const address = await signer.getAddress();
+          const bal = await contract.balanceOf(address);
+          setUserBalance(ethers.formatEther(bal)); // Convert from Wei to Human readable
+      }
+
+      // 2. Fetch Registry
       try {
         const count = await contract.nextBondId();
         let tempRegistry = [];
-        // Fetch last 3 bonds
         for (let i = Number(count); i > Math.max(0, Number(count) - 3); i--) {
           const bond = await contract.bonds(i);
           tempRegistry.push({
@@ -65,10 +80,10 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchRegistry();
+    fetchData();
   }, [signer]);
 
-  // 1. ANALYZE (Calls Python Real-Data Backend)
+  // --- 1. ANALYZE ---
   const handleAnalyze = async () => {
     if (!file) return toast.error("Select a file first");
     setLoading(true);
@@ -77,35 +92,27 @@ export default function Home() {
     setAiData(null); 
     
     addLog(`[1/5] Uploading Document: ${file.name}...`);
-    
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      // Calls your Production Backend
       const res = await axios.post("https://verifychain-rwa.onrender.com/analyze_and_oracle", formData);
-      
       const analysis = res.data.ai_analysis;
       const oracle = res.data.oracle_data;
       const faceValue = parseInt(analysis.face_value_amount || 0);
 
-      // --- PILLAR 1: AI METADATA ---
-      if (analysis.bond_name === "Unknown" || !analysis.bond_name) {
-          addLog(`[AI] ⚠️ Could not identify Bond Name.`);
-      } else {
-          addLog(`[AI] Extracted Metadata: ${analysis.bond_name}`);
-      }
+      if (analysis.bond_name === "Unknown") addLog(`[AI] ⚠️ Could not identify Bond.`);
+      else addLog(`[AI] Extracted Metadata: ${analysis.bond_name}`);
+      
       setTrustScore(20);
       await new Promise(r => setTimeout(r, 500)); 
 
-      // --- PILLAR 2: PROOF OF RESERVE (CRITICAL CHECK) ---
       addLog(`[PoR] Document Face Value: ${faceValue > 0 ? "₹" + faceValue.toLocaleString() : "Unknown"}`);
       
       if (faceValue <= 0) {
           addLog(`[PoR] ❌ CRITICAL FAILURE: No Reserve Value found.`);
-          addLog(`[System] Verification Terminated.`);
           setTrustScore(10); 
-          toast.error("Verification Failed: Invalid Bond Document");
+          toast.error("Verification Failed");
           setLoading(false);
           return; 
       }
@@ -114,18 +121,16 @@ export default function Home() {
       setTrustScore(50);
       await new Promise(r => setTimeout(r, 500));
 
-      // --- PILLAR 3: ORACLE CHECK ---
       addLog(`[Oracle] Connection to Yahoo Finance API...`);
       addLog(`[Oracle] Real-Time 10Y Yield: ${oracle.live_yield}%`);
       setTrustScore(80);
       await new Promise(r => setTimeout(r, 500));
 
-      // --- PILLAR 4: SECURITY ---
-      addLog(`[Audit] Contract: ${CONTRACT_ADDRESS.slice(0,6)}... verified.`);
+      addLog(`[Audit] Contract verified.`);
       setTrustScore(100);
 
       setAiData(res.data);
-      toast.success("Verification Complete. Asset Valid.");
+      toast.success("Verification Complete.");
       
     } catch (err) {
       addLog("CRITICAL ERROR: Backend Connection Failed");
@@ -134,37 +139,58 @@ export default function Home() {
     setLoading(false);
   };
 
-  // 2. MINT (Calls Celo Blockchain)
+  // --- 2. MINT ---
   const handleMint = async () => {
     if (!signer) return toast.error("Connect Wallet First");
     const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-    const toastId = toast.loading("Fractionalizing Bond on Celo...");
+    const toastId = toast.loading("Fractionalizing Bond...");
 
     try {
       addLog("Requesting Wallet Signature...");
-      
       const tx = await contract.createAsset(
         aiData.ai_analysis.bond_name || "Unknown Bond",
         aiData.ai_analysis.isin || "UNKN",
         aiData.ai_analysis.face_value_amount || 1000000,
-        Math.floor(aiData.oracle_data.live_yield * 100), // e.g. 4.17 -> 417
+        Math.floor(aiData.oracle_data.live_yield * 100), 
         "QmMockHashForDemo"
       );
-      
       addLog(`Transaction Sent: ${tx.hash}`);
       await tx.wait();
-      
       addLog("Asset Fractionalized & Tokens Distributed!");
       toast.success("Bond Tokenized Successfully", { id: toastId });
-      fetchRegistry();
+      fetchData(); // Refresh balance and registry
     } catch (err: any) {
       console.error(err);
       toast.error("Minting Failed", { id: toastId });
-      addLog(`ERROR: ${err.reason || err.message}`);
     }
   };
 
-  // 3. KYC SIM
+  // --- 3. TRANSFER (SELL) ---
+  const handleTransfer = async () => {
+      if (!signer) return toast.error("Connect Wallet First");
+      if (!recipient || !amountToSend) return toast.error("Enter details");
+      
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      const toastId = toast.loading(`Transferring ${amountToSend} Tokens...`);
+
+      try {
+          // Parse amount to 18 decimals
+          const tokens = ethers.parseUnits(amountToSend, 18);
+          
+          addLog(`Initiating Transfer to ${recipient.slice(0,6)}...`);
+          const tx = await contract.transfer(recipient, tokens);
+          await tx.wait();
+          
+          addLog(`Success! Sent ${amountToSend} IGBT to investor.`);
+          toast.success("Transfer Complete", { id: toastId });
+          fetchData(); // Update balance
+          setAmountToSend("");
+      } catch (err) {
+          console.error(err);
+          toast.error("Transfer Failed", { id: toastId });
+      }
+  }
+
   const handleKYC = async () => {
     if (!signer) return toast.error("Connect Wallet First");
     const userAddr = await signer.getAddress();
@@ -183,7 +209,6 @@ export default function Home() {
       
       <Navbar setSigner={setSigner} signer={signer} />
 
-      {/* --- HERO SECTION --- */}
       <section className="pt-32 pb-16 px-6 text-center max-w-5xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/20 border border-green-500/30 text-green-400 text-xs font-bold mb-6">
@@ -204,7 +229,6 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* --- THE TRUST DASHBOARD --- */}
       <div id="app" className="py-20 bg-gradient-to-b from-black to-green-950/20 border-y border-white/5">
         <main className="max-w-7xl mx-auto px-6 grid lg:grid-cols-12 gap-8">
           
@@ -224,7 +248,6 @@ export default function Home() {
                   accept=".pdf"
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                  id="file-upload"
                 />
                 <div className="flex flex-col items-center justify-center">
                   <div className="w-16 h-16 bg-gray-900 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -253,18 +276,14 @@ export default function Home() {
           {/* RIGHT: LIVE DATA FEED */}
           <div className="lg:col-span-5 space-y-6">
             
-            {/* 1. TRUST SCORE CARD */}
+            {/* TRUST SCORE */}
             <div className="glass-panel p-6 rounded-2xl flex justify-between items-center border border-white/5 relative overflow-hidden">
-                <div className="absolute right-0 top-0 p-4 opacity-10">
-                    <Shield size={80} />
-                </div>
+                <div className="absolute right-0 top-0 p-4 opacity-10"><Shield size={80} /></div>
                 <div>
                     <p className="text-gray-500 text-[10px] uppercase tracking-wider font-bold mb-1">AI Trust Score</p>
                     <div className="text-4xl font-bold text-white flex items-end gap-2">
                         {trustScore}/100 
-                        <span className="text-sm text-green-400 mb-1 font-normal">
-                            {trustScore > 90 ? "(AAA Rated)" : "(Pending)"}
-                        </span>
+                        <span className="text-sm text-green-400 mb-1 font-normal">{trustScore > 90 ? "(AAA Rated)" : "(Pending)"}</span>
                     </div>
                 </div>
                 <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${trustScore > 90 ? 'border-green-500 text-green-500' : 'border-gray-700 text-gray-700'}`}>
@@ -272,25 +291,7 @@ export default function Home() {
                 </div>
             </div>
 
-            {/* 2. FAIR VALUE TRACKER */}
-            <div className="glass-panel p-6 rounded-2xl border border-white/5">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold flex items-center gap-2"><BarChart3 size={18} className="text-blue-400"/> Oracle Feed (Yahoo Finance)</h3>
-                    <span className="text-[10px] bg-blue-900/30 text-blue-400 px-2 py-1 rounded">Live</span>
-                </div>
-                <div className="flex justify-between items-end">
-                    <div>
-                        <p className="text-xs text-gray-500">Benchmark Yield (10Y)</p>
-                        <p className="text-xl font-mono">{aiData ? Number(aiData.oracle_data.live_yield).toFixed(2) + "%" : "---"}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-xs text-gray-500">Data Source</p>
-                        <p className="text-xl font-mono text-green-400">^TNX</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. MINTING SECTION */}
+            {/* MINTING SECTION */}
             <div className={`glass-panel p-8 rounded-2xl border-t-4 ${aiData ? 'border-t-green-500 neon-glow' : 'border-t-gray-800'}`}>
               <div className="flex justify-between items-start mb-6">
                 <h2 className="text-xl font-bold">Asset Creation</h2>
@@ -304,31 +305,21 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-                  {/* FRACTIONALIZATION DISPLAY */}
                   <div className="bg-green-900/10 border border-green-500/30 p-4 rounded-xl">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-sm text-gray-400">Total Bond Value</span>
                         <span className="text-xl font-bold text-white">₹{parseInt(aiData.ai_analysis.face_value_amount).toLocaleString()}</span>
                     </div>
-                    <div className="h-px bg-green-500/20 my-2"></div>
                     <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Tokens to Mint</span>
                         <span className="text-xl font-mono text-green-400">{parseInt(aiData.ai_analysis.face_value_amount).toLocaleString()} IGBT</span>
                     </div>
-                    <p className="text-[10px] text-center text-gray-500 mt-2">
-                        1 IGBT Token = ₹1.00 (Pegged to Underlying)
-                    </p>
+                    <p className="text-[10px] text-center text-gray-500 mt-2">1 IGBT Token = ₹1.00 (Pegged)</p>
                   </div>
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between p-2 bg-white/5 rounded">
+                  <div className="flex justify-between p-2 bg-white/5 rounded text-sm">
                         <span>Oracle Yield</span>
-                        <span className="text-blue-400 font-bold">{aiData.oracle_data.live_yield}% APY</span>
-                    </div>
-                    <div className="flex justify-between p-2 bg-white/5 rounded">
-                        <span>Oracle Timestamp</span>
-                        <span className="text-gray-400">{new Date(aiData.oracle_data.timestamp * 1000).toLocaleTimeString()}</span>
-                    </div>
+                        <span className="text-blue-400 font-bold">{Number(aiData.oracle_data.live_yield).toFixed(2)}% APY</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
@@ -342,9 +333,61 @@ export default function Home() {
                 </div>
               )}
             </div>
+            
           </div>
         </main>
       </div>
+
+      {/* --- SECONDARY MARKET / DISTRIBUTION (NEW) --- */}
+      <section className="py-10 max-w-7xl mx-auto px-6">
+        <div className="glass-panel p-8 rounded-2xl border border-white/5 bg-gradient-to-r from-gray-900 to-black">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2"><Wallet className="text-purple-400"/> Distribution Console</h2>
+              <p className="text-sm text-gray-400">Sell fractional bond tokens to retail investors via Celo.</p>
+            </div>
+            <div className="bg-purple-900/20 border border-purple-500/30 px-6 py-3 rounded-xl text-right">
+              <p className="text-xs text-gray-400 uppercase">Your Balance</p>
+              <p className="text-2xl font-mono font-bold text-white">
+                {parseFloat(userBalance).toLocaleString()} <span className="text-purple-400 text-sm">IGBT</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 items-end">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-xs text-gray-400 uppercase">Investor Wallet Address</label>
+              <input 
+                type="text" 
+                placeholder="0x..." 
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400 uppercase">Amount (IGBT)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-3 text-gray-500">₹</span>
+                <input 
+                  type="number" 
+                  placeholder="500" 
+                  value={amountToSend}
+                  onChange={(e) => setAmountToSend(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg p-3 pl-8 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={handleTransfer}
+            className="w-full mt-6 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+          >
+            <Send size={18} /> TRANSFER ASSETS TO INVESTOR
+          </button>
+        </div>
+      </section>
 
       {/* --- LIVE REGISTRY --- */}
       <section className="py-20 max-w-7xl mx-auto px-6">
@@ -381,28 +424,6 @@ export default function Home() {
                 ))}
             </div>
         )}
-      </section>
-
-      {/* --- DOCS --- */}
-      <section className="py-20 bg-white/5 border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-6">
-            <h2 className="text-3xl font-bold mb-10 text-center">The 5 Pillars of Verification</h2>
-            <div className="grid md:grid-cols-5 gap-4">
-                {[
-                    {icon: <Database size={20} className="text-blue-400"/>, title: "Proof of Reserve", desc: "Hard Caps minting based on PDF Face Value."},
-                    {icon: <BarChart3 size={20} className="text-purple-400"/>, title: "Oracle Feed", desc: "Live Yahoo Finance connection for Yields."},
-                    {icon: <Shield size={20} className="text-red-400"/>, title: "Smart Contract", desc: "Non-upgradeable Celo logic with Ownable controls."},
-                    {icon: <Users size={20} className="text-yellow-400"/>, title: "KYC/AML", desc: "Simulated Biometric and sanctions screening."},
-                    {icon: <Globe size={20} className="text-green-400"/>, title: "Transparency", desc: "Public dashboard showing live backing ratios."},
-                ].map((item, i) => (
-                    <div key={i} className="glass-panel p-5 rounded-xl text-center hover:bg-white/10 transition">
-                        <div className="bg-white/5 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4">{item.icon}</div>
-                        <h3 className="font-bold mb-2 text-sm">{item.title}</h3>
-                        <p className="text-xs text-gray-400">{item.desc}</p>
-                    </div>
-                ))}
-            </div>
-        </div>
       </section>
 
       <footer className="py-10 text-center text-gray-600 text-sm border-t border-white/5">
