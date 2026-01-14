@@ -28,24 +28,26 @@ contract RealRWA is ERC20, Ownable {
     constructor() ERC20("India Govt Bond", "IGB") Ownable(msg.sender) {}
 
     // 1. CREATE ASSET (Backed by PDF Data)
-    function createAsset(
-        string memory _name,
-        string memory _isin,
-        uint256 _faceValue, // e.g., 1000000 (10 Lakhs)
-        string memory _ipfsHash
-    ) public onlyOwner {
-        nextBondId++;
-        bonds[nextBondId] = BondMetadata(
-            _name, 
-            _isin, 
-            _faceValue, 
-            0, // Yield starts at 0 until Oracle updates it
-            block.timestamp, 
-            _ipfsHash, 
-            true
-        );
-        emit BondCreated(nextBondId, _faceValue);
-    }
+    // UPDATE THIS FUNCTION ONLY
+function createAsset(
+    string memory _name,
+    string memory _isin,
+    uint256 _faceValue,
+    uint256 _initialYield, // <--- NEW ARGUMENT
+    string memory _ipfsHash
+) public onlyOwner {
+    nextBondId++;
+    bonds[nextBondId] = BondMetadata(
+        _name, 
+        _isin, 
+        _faceValue, 
+        _initialYield, // <--- USE IT HERE
+        block.timestamp, 
+        _ipfsHash, 
+        true
+    );
+    emit BondCreated(nextBondId, _faceValue);
+}
 
     // 2. THE ORACLE (Python calls this with Real Data)
     function updateMarketData(uint256 _bondId, uint256 _liveYield) public onlyOwner {
