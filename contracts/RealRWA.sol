@@ -28,26 +28,32 @@ contract RealRWA is ERC20, Ownable {
     constructor() ERC20("India Govt Bond", "IGB") Ownable(msg.sender) {}
 
     // 1. CREATE ASSET (Backed by PDF Data)
-    // UPDATE THIS FUNCTION ONLY
 function createAsset(
-    string memory _name,
-    string memory _isin,
-    uint256 _faceValue,
-    uint256 _initialYield, // <--- NEW ARGUMENT
-    string memory _ipfsHash
-) public onlyOwner {
-    nextBondId++;
-    bonds[nextBondId] = BondMetadata(
-        _name, 
-        _isin, 
-        _faceValue, 
-        _initialYield, // <--- USE IT HERE
-        block.timestamp, 
-        _ipfsHash, 
-        true
-    );
-    emit BondCreated(nextBondId, _faceValue);
-}
+        string memory _name,
+        string memory _isin,
+        uint256 _faceValue, // e.g. 10,000,000 (From PDF)
+        uint256 _initialYield,
+        string memory _ipfsHash
+    ) public onlyOwner {
+        nextBondId++;
+        bonds[nextBondId] = BondMetadata(
+            _name, 
+            _isin, 
+            _faceValue, 
+            _initialYield, 
+            block.timestamp, 
+            _ipfsHash, 
+            true
+        );
+        
+        // FRACTIONALIZATION MAGIC:
+        // We mint exactly 1 Token per 1 Unit of Currency found in the PDF.
+        // If PDF says 10,000,000 INR, we mint 10,000,000 Tokens.
+        // The * 10**18 makes it divisible down to 0.000000000000000001
+        _mint(msg.sender, _faceValue * 10**18); 
+        
+        emit BondCreated(nextBondId, _faceValue);
+    }
 
     // 2. THE ORACLE (Python calls this with Real Data)
     function updateMarketData(uint256 _bondId, uint256 _liveYield) public onlyOwner {

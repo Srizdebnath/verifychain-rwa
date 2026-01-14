@@ -70,7 +70,7 @@ The user interface is a Modern Next.js application that orchestrates the flow.
 ## 🚀 Live Demo & Links
 - **Frontend Deployed URL**: [Click Here](https://verifychain-kappa.vercel.app/)
 - **Backend API URL**: [Click Here](https://verifychain-rwa.onrender.com)
-- **Smart Contract Address**: `0xE715acd4c54F030d021b7147c20786623fFf482a` (Celo Sepolia Testnet)
+- **Smart Contract Address**: `0xC18243d1A4014A973B2206e3FC8FcCb65aaA0195` (Celo Sepolia Testnet)
 
 ![Demo](assets/demo.png)
 

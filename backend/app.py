@@ -15,7 +15,7 @@ app = Flask(__name__)
 CORS(app)
 
 CELO_RPC = "https://forno.celo-sepolia.celo-testnet.org" 
-CONTRACT_ADDRESS = "0xE715acd4c54F030d021b7147c20786623fFf482a"
+CONTRACT_ADDRESS = "0xC18243d1A4014A973B2206e3FC8FcCb65aaA0195"
 PRIVATE_KEY = os.getenv("PRIVATE_KEY") 
 
 CONTRACT_ABI_JSON = """
